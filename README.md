@@ -225,6 +225,54 @@ docker run -v $PWD/examples/rwflowpack:/data --rm -it \
 10.0.0.3|   10.0.0.2|45692| 5666|  6|        15|      2767|FS PA   |2023/10/30T18:50:17.142|    0.038|2023/10/30T18:50:17.180| S0|
 10.0.0.3|   10.0.0.2|45692| 5666|  6|         1|        52|    A   |2023/10/30T18:50:17.180|    0.000|2023/10/30T18:50:17.180| S0|
 ```
+We can achieve the same thing by using docker-compose (recommended):
+```yaml
+---
+version: '2.2'
+
+services:
+  rwflowpack:
+    image: cmusei/silk_packing:latest
+    container_name: rwflowpack
+    ports:
+      - 18001:18001
+    volumes:
+      - "./examples/rwflowpack:/data"
+    command: >
+        rwflowpack
+        --input-mode=stream
+        --root-directory=/data
+        --sensor-configuration=/data/sensor.conf
+        --site-config-file=/data/silk.conf
+        --output-mode=local-storage
+        --log-destination=stdout
+        --no-daemon
+    healthcheck:
+      test: timeout 10s bash -c ':> /dev/tcp/127.0.0.1/18001' || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+  yaf:
+    image: cmusei/yaf:latest
+    container_name: yaf
+    cap_add:
+      - NET_ADMIN
+    network_mode: "host"
+    command: >
+        --in ens192 
+        --live pcap 
+        --ipfix tcp 
+        --out localhost 
+        --silk 
+        --verbose 
+        --ipfix-port=18001 
+        --applabel 
+        --max-payload 2048 
+        --plugin-name=/netsa/lib/yaf/dpacketplugin.so
+    depends_on:
+      rwflowpack:
+        condition: service_healthy
+```
 
 ### [Use yaf version 3](https://tools.netsa.cert.org/yaf/new_yaf3.html)
 
